@@ -6,12 +6,13 @@ template for this kind of bug" instead of re-deriving it.
 
 What the SDK actually requires
 ------------------------------
-`pip install everos` gives a generated HTTP client for the hosted EverOS API
-(https://api.evermind.ai). Despite the "local demo" framing, `everos.EverOS`
-raises immediately unless `EVEROS_API_KEY` is set -- there is no keyless local
-mode in 0.4.0. The relevant call is:
+`pip install everos-cloud` gives the HTTP client for the hosted EverOS API,
+imported as `everos_cloud`. It needs an API key (EVEROS_API_KEY); the relevant
+call is:
 
-    client.v1.memories.add(user_id=..., session_id=..., messages=[...])
+    from everos_cloud import EverOS
+    client = EverOS(api_key=os.environ.get("EVEROS_API_KEY"))
+    client.add(session_id=..., messages=[...])
 
 So this script is written against that real API, and when the key is absent (or
 the API errors) it falls back to templates/store_sqlite.py rather than failing.
@@ -29,40 +30,23 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from store_sqlite import load_templates, render_markdown, store_templates  # noqa: E402
 
-USER_ID = "prompt-compressor"
-SESSION_ID = "prompt-compressor-templates"
-
-# Timestamps must be supplied by the caller; a fixed base keeps runs reproducible
-# (and the API only uses these for memory ordering).
-_TIMESTAMP_BASE_MS = 1_700_000_000_000
+SESSION_ID = "prompt_compressor"
 
 
-def memory_messages(row: dict, index: int) -> list[dict]:
-    """Render one template as an EverOS message pair.
-
-    A user turn naming the task type plus an assistant turn holding the template
-    body -- that shape is what makes the memory retrievable by a later query
-    like "template for a timezone comparison bug".
-    """
-    timestamp = _TIMESTAMP_BASE_MS + index * 1000
+def memory_messages(row: dict) -> list[dict]:
+    """Render one template as an EverOS memory: a single user message whose
+    content is the template's rendered markdown."""
     return [
         {
             "role": "user",
-            "content": (
-                f"Reusable one-shot prompt template {row['template_id']} for "
-                f"{row['language']} tasks ({row['cluster_size']} similar conversations)."
-            ),
-            "timestamp": timestamp,
-        },
-        {
-            "role": "assistant",
             "content": render_markdown(row),
-            "timestamp": timestamp + 1,
+            "timestamp": int(time.time() * 1000),
         },
     ]
 
@@ -73,23 +57,21 @@ def store_in_everos(rows: list[dict], dry_run: bool = False) -> int:
     Raises on any failure so the caller can fall back; it never swallows an error
     and reports success.
     """
-    import everos
+    from everos_cloud import EverOS
 
     if dry_run:
-        for i, row in enumerate(rows):
-            msgs = memory_messages(row, i)
+        for row in rows:
+            msgs = memory_messages(row)
             print(f"\n--- {row['template_id']} would be stored as {len(msgs)} messages ---")
-            print(msgs[0]["content"])
-            print(msgs[1]["content"][:400] + "...")
+            print(msgs[0]["content"][:400] + "...")
         return len(rows)
 
-    client = everos.EverOS()  # reads EVEROS_API_KEY / EVER_OS_BASE_URL
+    client = EverOS(api_key=os.environ.get("EVEROS_API_KEY"))
     stored = 0
-    for i, row in enumerate(rows):
-        client.v1.memories.add(
-            user_id=USER_ID,
+    for row in rows:
+        client.add(
             session_id=SESSION_ID,
-            messages=memory_messages(row, i),
+            messages=memory_messages(row),
         )
         print(f"[everos] stored {row['template_id']} ({row['language']}, "
               f"{row['cluster_size']} prompts)")
