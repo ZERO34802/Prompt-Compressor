@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collapse · token savings proof</title>
+<style>
+  /* ============================================================
+     ONE PLACE TO SWAP FILENAMES AT INTEGRATION — see also the
+     JS DATA constant below. CSS custom props are the theme.
+     ============================================================ */
+  :root{
+    --ink:#0a0d10;          /* page background */
+    --panel:#12171c;        /* card background */
+    --panel-2:#171e25;      /* raised / hover */
+    --line:#232c35;         /* hairline borders */
+    --text:#e8eef2;         /* primary text */
+    --muted:#8a97a3;        /* secondary text */
+    --faint:#5b6873;        /* tertiary */
+    --green:#00f5a0;        /* THE savings accent — used only for savings */
+    --green-dim:#0f3d32;
+    --red:#ff5d5d;          /* waste / original */
+    --red-dim:#3a1c1f;
+    --amber:#ffcf5c;        /* slot highlight */
+    --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #0f1a18 0%, transparent 60%),
+      var(--ink);
+    color:var(--text);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.45;
+    min-height:100vh;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 22px 80px}
+
+  /* ---- masthead ---- */
+  header.mast{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .logo{font-family:var(--mono);font-weight:700;font-size:19px;letter-spacing:-.5px}
+  .logo .k{color:var(--green)}
+  .tag{color:var(--muted);font-size:13px;font-family:var(--mono)}
+  .sub{color:var(--faint);font-size:12.5px;margin:2px 0 22px;max-width:60ch}
+
+  /* ---- tabs ---- */
+  nav.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:26px;flex-wrap:wrap}
+  .tab{
+    appearance:none;background:none;border:0;color:var(--muted);
+    font-family:var(--mono);font-size:13px;padding:11px 15px 12px;cursor:pointer;
+    border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;
+    white-space:nowrap;
+  }
+  .tab .n{color:var(--faint);margin-right:7px}
+  .tab:hover{color:var(--text)}
+  .tab[aria-selected="true"]{color:var(--text);border-bottom-color:var(--green)}
+  .tab[aria-selected="true"] .n{color:var(--green)}
+  .tab:focus-visible{outline:2px solid var(--green);outline-offset:2px;border-radius:4px}
+
+  .view{display:none;animation:fade .28s ease both}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---- state banners ---- */
+  .banner{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:18px 20px;color:var(--muted);font-size:14px}
+  .banner.err{border-color:var(--red-dim);background:linear-gradient(0deg,var(--red-dim),transparent),var(--panel)}
+  .banner code{font-family:var(--mono);color:var(--text);background:#0006;padding:1px 6px;border-radius:5px}
+
+  /* ============ VIEW 1 — THE PROOF ============ */
+  .heroline{font-family:var(--mono);font-size:12.5px;color:var(--faint);margin-bottom:14px;text-transform:uppercase;letter-spacing:2px}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:30px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 20px 18px;position:relative;overflow:hidden}
+  .card .big{font-family:var(--mono);font-weight:700;font-size:clamp(30px,4.4vw,52px);line-height:1;letter-spacing:-2px;font-variant-numeric:tabular-nums}
+  .card .lbl{color:var(--muted);font-size:12px;margin-top:12px;letter-spacing:.2px}
+  .card.savings .big{color:var(--green)}
+  .card.savings{border-color:#1c5140}
+  .card.savings::after{content:"";position:absolute;inset:0;background:radial-gradient(120px 80px at 90% 0%,#00f5a022,transparent 70%);pointer-events:none}
+
+  .ba{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 22px 24px}
+  .ba h3{margin:0 0 4px;font-size:14px;font-weight:600}
+  .ba .cap{color:var(--faint);font-size:12.5px;margin:0 0 20px}
+  .barrow{display:flex;align-items:center;gap:14px;margin:14px 0}
+  .barrow .tagname{width:78px;flex:none;font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
+  .track{flex:1;height:38px;background:#0c1013;border-radius:9px;overflow:hidden;position:relative}
+  .fill{height:100%;border-radius:9px;display:flex;align-items:center;padding:0 14px;font-family:var(--mono);font-size:12.5px;color:#06110d;font-weight:600;white-space:nowrap;width:0;transition:width 1.05s cubic-bezier(.2,.8,.2,1)}
+  .fill.red{background:linear-gradient(90deg,#ff7a7a,#ff5d5d);color:#2a0a0a}
+  .fill.green{background:linear-gradient(90deg,#00f5a0,#37ffbe);box-shadow:0 0 26px #00f5a055}
+
+  /* ============ VIEW 2 — EXPLORER ============ */
+  .listhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+  .listhead .h{font-size:14px;font-weight:600}
+  .listhead .c{font-family:var(--mono);font-size:12px;color:var(--faint)}
+  .row{background:var(--panel);border:1px solid var(--line);border-radius:11px;margin-bottom:9px;overflow:hidden}
+  .rowhead{display:grid;grid-template-columns:130px 96px 1fr auto;gap:12px;align-items:center;padding:14px 16px;cursor:pointer}
+  .rowhead:hover{background:var(--panel-2)}
+  .cid{font-family:var(--mono);font-size:13px;color:var(--text)}
+  .badge{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);text-align:center}
+  .meta{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .pct{font-family:var(--mono);font-weight:700;font-size:24px;color:var(--green);text-align:right;font-variant-numeric:tabular-nums;letter-spacing:-1px}
+  .pct small{font-size:12px;color:var(--faint);font-weight:400;margin-left:2px}
+  .chev{color:var(--faint);transition:transform .2s;display:inline-block;margin-left:8px}
+  .row.open .chev{transform:rotate(90deg)}
+  .rowbody{display:none;padding:0 16px 18px;border-top:1px solid var(--line)}
+  .row.open .rowbody{display:block}
+  .codebox{background:#080b0e;border:1px solid var(--line);border-radius:9px;padding:14px 16px;font-family:var(--mono);font-size:12.5px;color:#cfe;white-space:pre-wrap;word-break:break-word;margin:16px 0 14px;line-height:1.55}
+  .minibar{display:flex;align-items:center;gap:12px;margin:8px 0}
+  .minibar .ml{width:66px;flex:none;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right}
+  .minitrack{flex:1;height:22px;background:#0c1013;border-radius:6px;overflow:hidden}
+  .minifill{height:100%;border-radius:6px;display:flex;align-items:center;padding:0 9px;font-family:var(--mono);font-size:11px;font-weight:600;white-space:nowrap}
+  .minifill.red{background:#ff5d5d;color:#2a0a0a}
+  .minifill.green{background:#00f5a0;color:#06110d}
+
+  /* ============ VIEW 3 — TEMPLATES ============ */
+  .tgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .tpl{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:18px 18px 16px;display:flex;flex-direction:column}
+  .tpl .tid{font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:10px;display:flex;justify-content:space-between}
+  .tpl .ttext{font-family:var(--mono);font-size:14px;line-height:1.6;color:var(--text);margin-bottom:16px}
+  .slot{color:var(--amber);background:#ffcf5c1a;border:1px solid #ffcf5c40;border-radius:5px;padding:0 4px}
+  .tpl .foot{margin-top:auto;display:flex;gap:18px;border-top:1px solid var(--line);padding-top:13px}
+  .stat .v{font-family:var(--mono);font-weight:700;font-size:17px;font-variant-numeric:tabular-nums}
+  .stat .v.g{color:var(--green)}
+  .stat .k{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+  .learned{font-size:12px;color:var(--muted);margin-bottom:14px}
+  .learned b{color:var(--text);font-family:var(--mono)}
+
+  /* ============ VIEW 4 — LIVE COST COUNTER ============ */
+  .live{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start}
+  .promptbox{width:100%;min-height:190px;resize:vertical;background:#080b0e;border:1px solid var(--line);border-radius:12px;padding:16px 18px;color:var(--text);font-family:var(--mono);font-size:14px;line-height:1.6;outline:none}
+  .promptbox:focus{border-color:#1c5140;box-shadow:0 0 0 3px #00f5a01a}
+  .promptbox::placeholder{color:var(--faint)}
+  .gauge{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .readout{font-family:var(--mono);font-weight:700;font-size:34px;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1}
+  .readout .rt{color:var(--text)}
+  .readout .dol{color:var(--green)}
+  .readsub{color:var(--muted);font-size:12px;margin:8px 0 18px;font-family:var(--mono)}
+  .meter{height:12px;background:#0c1013;border-radius:8px;overflow:hidden;margin-bottom:6px}
+  .meterfill{height:100%;width:0;border-radius:8px;transition:width .35s cubic-bezier(.2,.8,.2,1),background .35s}
+  .scoreline{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:20px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:999px;border:1px dashed #3a4650;color:var(--muted);transition:.2s}
+  .chip.done{display:none}
+  .chips .allgood{font-family:var(--mono);font-size:12.5px;color:var(--green)}
+  .liveaside h3{margin:0 0 4px;font-size:14px}
+  .liveaside .cap{color:var(--faint);font-size:12.5px;margin:0 0 14px}
+
+  @media(max-width:820px){
+    .cards{grid-template-columns:repeat(2,1fr)}
+    .tgrid{grid-template-columns:1fr}
+    .live{grid-template-columns:1fr}
+    .rowhead{grid-template-columns:1fr auto;row-gap:6px}
+    .rowhead .badge,.rowhead .meta{grid-column:1}
+  }
+  @media(prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <span class="logo"><span class="k">&gt;_</span> collapse</span>
+    <span class="tag">multi-turn → one-shot · token savings, proven</span>
+  </header>
+  <p class="sub">We replay expensive multi-turn coding sessions as a single well-formed prompt, then bill both with tiktoken. Every number below is measured, not estimated.</p>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-view="proof"><span class="n">01</span>The Proof</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="explorer"><span class="n">02</span>Conversation Explorer</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="templates"><span class="n">03</span>Learned Templates</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="live"><span class="n">04</span>Live Cost Counter</button>
+  </nav>
+
+  <!-- ============ VIEW 1 ============ -->
+  <section class="view active" id="view-proof" role="tabpanel">
+    <div class="heroline">measured across the corpus</div>
+    <div class="cards" id="heroCards">
+      <div class="card savings"><div class="big" data-count="0" data-suffix="%">0</div><div class="lbl">avg tokens saved</div></div>
+      <div class="card savings"><div class="big" data-count="0">0</div><div class="lbl">total tokens saved</div></div>
+      <div class="card savings"><div class="big" data-count="0" data-prefix="$" data-dp="2">0</div><div class="lbl">total cost saved</div></div>
+      <div class="card"><div class="big" data-count="0">0</div><div class="lbl">conversations analyzed</div></div>
+    </div>
+    <div class="ba">
+      <h3>The average conversation, before and after</h3>
+      <p class="cap">Bars are scaled to billed tokens. Same task, same result — one prompt instead of a back-and-forth.</p>
+      <div class="barrow">
+        <span class="tagname">Original</span>
+        <div class="track"><div class="fill red" id="baOrig"></div></div>
+      </div>
+      <div class="barrow">
+        <span class="tagname">Collapsed</span>
+        <div class="track"><div class="fill green" id="baColl"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VIEW 2 ============ -->
+  <section class="view" id="view-explorer" role="tabpanel">
+    <div class="listhead"><span class="h">Every conversation, best savings first</span><span class="c" id="expCount"></span></div>
+    <div id="rows"></div>
+  </section>
+
+  <!-- ============ VIEW 3 ============ -->
+  <section class="view" id="view-templates" role="tabpanel">
+    <div class="listhead"><span class="h">Patterns the pipeline learned to reuse</span><span class="c" id="tplCount"></span></div>
+    <div class="tgrid" id="tplGrid"></div>
+  </section>
+
+  <!-- ============ VIEW 4 ============ -->
+  <section class="view" id="view-live" role="tabpanel">
+    <div class="live">
+      <div>
+        <div class="liveaside"><h3>Write the prompt you'd actually send</h3><p class="cap">A vague prompt costs round-trips. Watch the estimate drop as your prompt gets specific — scored live, no API calls.</p></div>
+        <textarea class="promptbox" id="prompt" placeholder="e.g. Fix the TokenExpiredError in auth/session.py line 142 — return a 401 instead of raising."></textarea>
+      </div>
+      <div class="gauge">
+        <div class="readout"><span class="rt" id="rtOut">~5 round-trips</span></div>
+        <div class="readsub">estimated cost <span class="dol" id="dolOut">$0.31</span></div>
+        <div class="meter"><div class="meterfill" id="meterFill"></div></div>
+        <div class="scoreline"><span>vague</span><span id="scoreNum">0 / 100</span><span>one-shot</span></div>
+        <div class="chips" id="chips"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ================================================================
+   INTEGRATION: swap these three filenames at ~2:45 and you're done.
+   Paths are relative to the REPO ROOT (serve `python -m http.server`
+   from the repo root, not from dashboard/).
+   ================================================================ */
+const DATA = {
+  results:   "/data/sample_results.jsonl",
+  templates: "/data/sample_templates.jsonl",
+  summary:   "/data/sample_summary.json",
+};
+const PRICE_PER_TOKEN = 9 / 1e6;   // $9 / 1M tokens
+const AVG_TURN_TOKENS = 6900;      // for the live estimator
+
+const reduceMotion = window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+/* ---------- tiny helpers ---------- */
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const commas = n => Math.round(n).toLocaleString("en-US");
+// pct_saved may arrive as a fraction (0.95) or a percent (95). Normalize to percent.
+const asPct = p => (p <= 1 ? p * 100 : p);
+const esc = s => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+async function loadText(path){
+  const r = await fetch(path);
+  if(!r.ok) throw new Error(`${path} → HTTP ${r.status}`);
+  return r.text();
+}
+const parseJSONL = t => t.split("\n").map(l=>l.trim()).filter(Boolean).map(l=>JSON.parse(l));
+
+/* ---------- count-up animation ---------- */
+function countUp(el){
+  const target = parseFloat(el.dataset.count);
+  const dp = parseInt(el.dataset.dp || "0", 10);
+  const pre = el.dataset.prefix || "", suf = el.dataset.suffix || "";
+  const fmt = v => pre + (dp ? v.toFixed(dp) : commas(v)) + suf;
+  if(reduceMotion){ el.textContent = fmt(target); return; }
+  const dur = 1100, t0 = performance.now();
+  const ease = x => 1 - Math.pow(1 - x, 3);
+  (function frame(now){
+    const p = Math.min(1, (now - t0)/dur);
+    el.textContent = fmt(target * ease(p));
+    if(p < 1) requestAnimationFrame(frame);
+  })(performance.now());
+}
+
+/* ================= VIEW 1 ================= */
+function renderProof(sum){
+  const cards = $$("#heroCards .big");
+  cards[0].dataset.count = asPct(sum.avg_pct_saved);
+  cards[1].dataset.count = sum.total_tokens_saved;
+  cards[2].dataset.count = sum.total_cost_saved_usd;
+  cards[3].dataset.count = sum.num_conversations;
+  cards.forEach(countUp);
+
+  const oTok = sum.avg_billed_tokens, cTok = sum.avg_collapsed_tokens;
+  const oTurn = sum.avg_original_turns;
+  $("#baOrig").textContent = `${oTurn.toFixed(1)} turns · ${commas(oTok)} tokens`;
+  $("#baColl").textContent = `1 turn · ${commas(cTok)} tokens`;
+  // scale to the larger (original) bar
+  const collPct = Math.max(6, (cTok / oTok) * 100);
+  requestAnimationFrame(()=>{
+    $("#baOrig").style.width = "100%";
+    $("#baColl").style.width = collPct + "%";
+  });
+}
+
+/* ================= VIEW 2 ================= */
+function renderExplorer(results){
+  const sorted = [...results].sort((a,b)=>asPct(b.pct_saved) - asPct(a.pct_saved));
+  $("#expCount").textContent = `${sorted.length} conversations`;
+  const maxTok = Math.max(...sorted.map(r=>r.billed_total_tokens));
+  const html = sorted.map((r,i)=>{
+    const oW = (r.billed_total_tokens / maxTok)*100;
+    const cW = Math.max(4,(r.collapsed_billed_tokens / maxTok)*100);
+    return `<div class="row" data-i="${i}">
+      <div class="rowhead">
+        <span class="cid">${esc(r.conv_id)}</span>
+        <span class="badge">${esc(r.language)}</span>
+        <span class="meta">${r.original_turns} turns · ${commas(r.billed_total_tokens)} tok</span>
+        <span class="pct">${asPct(r.pct_saved).toFixed(0)}<small>% saved</small><span class="chev">›</span></span>
+      </div>
+      <div class="rowbody">
+        <div class="codebox">${esc(r.collapsed_prompt)}</div>
+        <div class="minibar"><span class="ml">original</span><div class="minitrack"><div class="minifill red" style="width:${oW}%">${commas(r.billed_total_tokens)}</div></div></div>
+        <div class="minibar"><span class="ml">collapsed</span><div class="minitrack"><div class="minifill green" style="width:${cW}%">${commas(r.collapsed_billed_tokens)}</div></div></div>
+      </div>
+    </div>`;
+  }).join("");
+  $("#rows").innerHTML = html;
+  $("#rows").onclick = e=>{
+    const row = e.target.closest(".row");
+    if(row) row.classList.toggle("open");
+  };
+}
+
+/* ================= VIEW 3 ================= */
+function highlightSlots(text){
+  return esc(text).replace(/\{(\w+)\}/g, (_,n)=>`<span class="slot">{${n}}</span>`);
+}
+function renderTemplates(tpls){
+  const sorted = [...tpls].sort((a,b)=>b.avg_tokens_saved - a.avg_tokens_saved);
+  $("#tplCount").textContent = `${sorted.length} templates`;
+  $("#tplGrid").innerHTML = sorted.map(t=>`
+    <div class="tpl">
+      <div class="tid"><span>${esc(t.template_id)}</span><span>${esc(t.language)}</span></div>
+      <div class="ttext">${highlightSlots(t.template_text)}</div>
+      <div class="learned">learned from <b>${t.cluster_size}</b> conversations</div>
+      <div class="foot">
+        <div class="stat"><div class="v g">${commas(t.avg_tokens_saved)}</div><div class="k">avg tokens saved</div></div>
+        <div class="stat"><div class="v">${t.avg_turns_saved.toFixed(1)}</div><div class="k">avg turns saved</div></div>
+      </div>
+    </div>`).join("");
+}
+
+/* ================= VIEW 4 — live estimator ================= */
+const RULES = [
+  { pts:25, chip:"＋ name a file",         test:s=>/\b[\w/-]+\.(py|js|ts|java|go|rb|cpp)\b/.test(s) },
+  { pts:20, chip:"＋ add a line number",   test:s=>/\bline \d+|:\d+\b/.test(s) },
+  { pts:20, chip:"＋ name the function",   test:s=>/\b\w+\(\)|[a-z]+[A-Z]\w+|\w+_\w+/.test(s) },
+  { pts:20, chip:"＋ add an action verb",  test:s=>/\b(fix|add|refactor|remove|rename|handle|return|replace)\b/i.test(s) },
+  { pts:15, chip:"＋ mention the error",   test:s=>/error|exception|throws?|[A-Z]\w+Error/.test(s) },
+];
+function roundTrips(score){ return score<30?5 : score<55?3 : score<80?2 : 1; }
+function costFor(rt){ return rt * AVG_TURN_TOKENS * PRICE_PER_TOKEN; }
+function lerpColor(t){ // red→green by t in [0,1]
+  const a=[255,93,93], b=[0,245,160];
+  return `rgb(${a.map((c,i)=>Math.round(c+(b[i]-c)*t)).join(",")})`;
+}
+let dolAnim = 0.31;           // current displayed dollar figure
+function tickDollar(target){
+  if(reduceMotion){ dolAnim=target; $("#dolOut").textContent="$"+target.toFixed(2); return; }
+  const start=dolAnim, t0=performance.now(), dur=380;
+  (function f(now){
+    const p=Math.min(1,(now-t0)/dur);
+    const v=start+(target-start)*(1-Math.pow(1-p,3));
+    dolAnim=v; $("#dolOut").textContent="$"+v.toFixed(2);
+    if(p<1) requestAnimationFrame(f);
+  })(performance.now());
+}
+function scorePrompt(){
+  const s = $("#prompt").value;
+  let score=0; const missing=[];
+  RULES.forEach(r=>{ if(r.test(s)) score+=r.pts; else missing.push(r); });
+  score=Math.max(0,Math.min(100,score));
+  const rt=roundTrips(score), cost=costFor(rt);
+  $("#rtOut").textContent = `~${rt} round-trip${rt>1?"s":""}`;
+  tickDollar(cost);
+  $("#meterFill").style.width = score+"%";
+  $("#meterFill").style.background = lerpColor(score/100);
+  $("#scoreNum").textContent = `${score} / 100`;
+  const chips = $("#chips");
+  if(missing.length===0){
+    chips.innerHTML = `<span class="allgood">✓ one-shot ready — nothing left to add</span>`;
+  } else {
+    chips.innerHTML = missing.map(r=>`<span class="chip">${r.chip}</span>`).join("");
+  }
+}
+
+/* ================= tabs ================= */
+function initTabs(){
+  const tabs=$$(".tab");
+  tabs.forEach(tab=>{
+    tab.onclick=()=>{
+      tabs.forEach(t=>t.setAttribute("aria-selected", t===tab));
+      $$(".view").forEach(v=>v.classList.remove("active"));
+      $("#view-"+tab.dataset.view).classList.add("active");
+    };
+  });
+}
+
+/* ================= boot ================= */
+async function boot(){
+  initTabs();
+  $("#prompt").addEventListener("input", scorePrompt);
+  scorePrompt(); // initial empty-state readout
+  try{
+    const [resTxt, tplTxt, sumTxt] = await Promise.all([
+      loadText(DATA.results), loadText(DATA.templates), loadText(DATA.summary)
+    ]);
+    const results = parseJSONL(resTxt);
+    const templates = parseJSONL(tplTxt);
+    const summary = JSON.parse(sumTxt);
+    renderProof(summary);
+    renderExplorer(results);
+    renderTemplates(templates);
+  }catch(err){
+    const msg = `<div class="banner err">Couldn't load the data files — <code>${esc(err.message)}</code>.
+      Serve from the <b>repo root</b> (<code>python -m http.server</code> at root, open <code>/dashboard/</code>),
+      and check the filenames in the <code>DATA</code> constant at the top of this file.</div>`;
+    $("#view-proof").insertAdjacentHTML("afterbegin", msg);
+    console.error(err);
+  }
+}
+document.addEventListener("DOMContentLoaded", boot);
+</script>
+</body>
+</html>
