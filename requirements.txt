@@ -1,0 +1,6 @@
+tiktoken
+datasets
+sentence-transformers
+scikit-learn
+anthropic
+flask
