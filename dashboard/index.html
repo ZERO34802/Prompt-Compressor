@@ -113,6 +113,84 @@
   .minifill.red{background:#ff5d5d;color:#2a0a0a}
   .minifill.green{background:#00f5a0;color:#06110d}
 
+  /* ---- collapse animation (the demo moment) ---- */
+  .collapsebtn{
+    appearance:none;cursor:pointer;margin-top:14px;
+    font-family:var(--mono);font-size:12.5px;font-weight:600;
+    color:var(--green);background:#00f5a012;border:1px solid #1c5140;border-radius:8px;
+    padding:8px 14px;transition:background .15s,box-shadow .15s;
+  }
+  .collapsebtn:hover{background:#00f5a022;box-shadow:0 0 18px #00f5a022}
+  .collapsebtn:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+  .stage{margin:14px 0 4px}
+  .stage:empty{display:none}
+  .bubbles{display:flex;flex-direction:column}
+  .bubble{
+    width:70%;max-height:70px;overflow:hidden;
+    border:1px solid var(--line);border-radius:12px;
+    background:var(--panel-2);color:var(--muted);
+    font-family:var(--mono);font-size:12px;
+    padding:10px 14px;margin-bottom:8px;
+    animation:bubblerise .3s ease both;
+    transition:
+      opacity 1.1s ease,
+      transform 1.1s cubic-bezier(.55,0,.3,1),
+      max-height 1.1s cubic-bezier(.55,0,.3,1),
+      margin 1.1s cubic-bezier(.55,0,.3,1),
+      padding 1.1s cubic-bezier(.55,0,.3,1),
+      border-width 1.1s;
+  }
+  .bubble.user{align-self:flex-end;background:#0f1f1a;border-color:#1c5140;border-bottom-right-radius:4px}
+  .bubble.assistant{align-self:flex-start;border-bottom-left-radius:4px}
+  .bubble .brole{
+    display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:1px;
+    color:var(--faint);margin-bottom:3px;
+  }
+  .bubble.user .brole{color:#3fae8c}
+  @keyframes bubblerise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  /* collapsing: every bubble sinks downward, shrinks and fades into the result box */
+  .stage.collapsing .bubble{
+    animation:none;opacity:0;transform:translateY(30px) scale(.8);
+    max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0;border-width:0;
+  }
+
+  .collapsestats{
+    display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;
+    font-family:var(--mono);margin:4px 0 10px;
+  }
+  .tokcounter{
+    font-weight:700;font-size:26px;letter-spacing:-1px;
+    font-variant-numeric:tabular-nums;color:var(--red);transition:color .5s;
+  }
+  .stage.done .tokcounter{color:var(--green)}
+  .turnsarrow{font-size:12.5px;color:var(--muted)}
+  .turnsarrow b{color:var(--text)}
+  .savedpct{
+    font-size:12.5px;font-weight:600;color:var(--green);
+    opacity:0;transform:translateY(4px);transition:opacity .45s .15s,transform .45s .15s;
+  }
+  .stage.done .savedpct{opacity:1;transform:none}
+
+  .collapsedbox{
+    background:linear-gradient(0deg,var(--green-dim),transparent 80%),#0a1410;
+    border:1px solid #1c5140;border-radius:12px;padding:14px 16px;
+    font-family:var(--mono);font-size:12.5px;line-height:1.55;color:#d8ffee;
+    white-space:pre-wrap;word-break:break-word;
+    opacity:0;transform:translateY(-10px) scale(.97);
+    transition:opacity .55s ease,transform .55s cubic-bezier(.2,.8,.2,1);
+  }
+  .collapsedbox .onelabel{
+    display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:1px;
+    color:var(--green);margin-bottom:6px;
+  }
+  .stage.done .collapsedbox{opacity:1;transform:none;animation:glowpop .8s ease both}
+  @keyframes glowpop{
+    0%{box-shadow:0 0 0 #00f5a000}
+    45%{box-shadow:0 0 46px #00f5a055}
+    100%{box-shadow:0 0 24px #00f5a022}
+  }
+
   /* ============ VIEW 3 — TEMPLATES ============ */
   .tgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
   .tpl{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:18px 18px 16px;display:flex;flex-direction:column}
@@ -295,8 +373,11 @@ function renderProof(sum){
 }
 
 /* ================= VIEW 2 ================= */
+let EXPLORER_ROWS = [];   // sorted results, indexed by .row[data-i]
+
 function renderExplorer(results){
   const sorted = [...results].sort((a,b)=>asPct(b.pct_saved) - asPct(a.pct_saved));
+  EXPLORER_ROWS = sorted;
   $("#expCount").textContent = `${sorted.length} conversations`;
   const maxTok = Math.max(...sorted.map(r=>r.billed_total_tokens));
   const html = sorted.map((r,i)=>{
@@ -310,6 +391,8 @@ function renderExplorer(results){
         <span class="pct">${asPct(r.pct_saved).toFixed(0)}<small>% saved</small><span class="chev">›</span></span>
       </div>
       <div class="rowbody">
+        <button class="collapsebtn" type="button">▶ Collapse it</button>
+        <div class="stage"></div>
         <div class="codebox">${esc(r.collapsed_prompt)}</div>
         <div class="minibar"><span class="ml">original</span><div class="minitrack"><div class="minifill red" style="width:${oW}%">${commas(r.billed_total_tokens)}</div></div></div>
         <div class="minibar"><span class="ml">collapsed</span><div class="minitrack"><div class="minifill green" style="width:${cW}%">${commas(r.collapsed_billed_tokens)}</div></div></div>
@@ -318,9 +401,66 @@ function renderExplorer(results){
   }).join("");
   $("#rows").innerHTML = html;
   $("#rows").onclick = e=>{
-    const row = e.target.closest(".row");
-    if(row) row.classList.toggle("open");
+    const btn = e.target.closest(".collapsebtn");
+    if(btn){
+      const row = btn.closest(".row");
+      runCollapse(row, EXPLORER_ROWS[+row.dataset.i]);
+      return;
+    }
+    const head = e.target.closest(".rowhead");
+    if(head) head.closest(".row").classList.toggle("open");
   };
+}
+
+/* ---- the collapse moment: stack of turns melts into one green prompt ---- */
+function animateTokens(el, from, to, dur){
+  const fmt = v => commas(v) + " tok";
+  if(reduceMotion){ el.textContent = fmt(to); return; }
+  const t0 = performance.now();
+  const ease = x => 1 - Math.pow(1 - x, 3);
+  (function frame(now){
+    const p = Math.min(1, (now - t0)/dur);
+    el.textContent = fmt(from + (to - from) * ease(p));
+    if(p < 1) requestAnimationFrame(frame);
+  })(performance.now());
+}
+
+function runCollapse(row, r){
+  const stage = row.querySelector(".stage");
+  const codebox = row.querySelector(".codebox");
+  const btn = row.querySelector(".collapsebtn");
+  stage.className = "stage";           // reset for replays
+
+  // 1) the multi-turn stack — placeholder bubbles, alternating roles
+  const turns = Math.max(1, r.original_turns);
+  const bubbles = Array.from({length: turns}, (_, k) => {
+    const role = k % 2 === 0 ? "user" : "assistant";
+    return `<div class="bubble ${role}" style="animation-delay:${k*55}ms;transition-delay:${k*70}ms">
+      <span class="brole">${role}</span>Turn ${k+1}</div>`;
+  }).join("");
+
+  stage.innerHTML = `
+    <div class="bubbles">${bubbles}</div>
+    <div class="collapsestats">
+      <span class="tokcounter">${commas(r.billed_total_tokens)} tok</span>
+      <span class="turnsarrow"><b>${r.original_turns} turns</b> → <b>1 turn</b></span>
+      <span class="savedpct">−${asPct(r.pct_saved).toFixed(0)}% tokens</span>
+    </div>
+    <div class="collapsedbox"><span class="onelabel">one-shot prompt</span>${esc(r.collapsed_prompt)}</div>`;
+
+  codebox.style.display = "none";      // the green box now carries the prompt
+  btn.textContent = "↻ Replay";
+
+  // 2) let the stack settle in, then melt it down while the counter drops
+  const HOLD = reduceMotion ? 0 : 650;              // time to read the stack
+  const DUR  = reduceMotion ? 0 : 1500;             // main collapse transition
+  const TAIL = reduceMotion ? 0 : turns * 70 + 150; // stagger runoff before the reveal
+  setTimeout(()=>{
+    stage.classList.add("collapsing");
+    animateTokens(stage.querySelector(".tokcounter"),
+                  r.billed_total_tokens, r.collapsed_billed_tokens, DUR + TAIL);
+    setTimeout(()=>stage.classList.add("done"), DUR + TAIL);
+  }, HOLD);
 }
 
 /* ================= VIEW 3 ================= */
