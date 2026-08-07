@@ -1,0 +1,10 @@
+{
+  "num_conversations": 60,
+  "avg_original_turns": 6.2667,
+  "avg_billed_tokens": 2911.3333,
+  "avg_collapsed_tokens": 387.6667,
+  "avg_pct_saved": 0.7967,
+  "total_tokens_saved": 151420,
+  "total_cost_saved_usd": 0.893364,
+  "num_templates": 7
+}
